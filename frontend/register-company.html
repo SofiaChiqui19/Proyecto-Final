@@ -14,7 +14,7 @@
       place-items: center;
     }
     .wrap {
-      width: min(620px, 92vw);
+      width: min(640px, 94vw);
       background: #fff;
       border-radius: 12px;
       padding: 22px;
@@ -45,6 +45,8 @@
     .topnav a { color:#1abc9c; text-decoration:none; font-size:14px; }
     .logo { text-align:center; margin-bottom:10px; }
     .logo img { max-width:140px; }
+    .preview { display:flex; align-items:center; gap:12px; }
+    .preview img { width:72px; height:72px; object-fit:cover; border-radius:10px; border:1px solid #eee; }
     @media (max-width:640px){ .grid { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -61,44 +63,54 @@
 
     <h1>Registrar Empresa</h1>
 
-    <form id="companyForm" autocomplete="on" novalidate>
+    <!-- IMPORTANTE: multipart/form-data -->
+    <form id="companyForm" enctype="multipart/form-data" autocomplete="on" novalidate>
       <div class="grid">
         <div class="full">
           <label for="repName">Nombre del representante</label>
-          <input id="repName" type="text" placeholder="Ej: Ana Pérez" required />
+          <input id="repName" name="name" type="text" placeholder="Ej: Ana Pérez" required />
         </div>
 
         <div>
           <label for="email">Correo de acceso</label>
-          <input id="email" type="email" placeholder="empresa@correo.com" required />
+          <input id="email" name="email" type="email" placeholder="empresa@correo.com" required />
           <div class="hint">Este correo será el usuario para iniciar sesión.</div>
         </div>
 
         <div>
           <label for="password">Contraseña</label>
-          <input id="password" type="password" placeholder="Mínimo 6 caracteres" minlength="6" required />
+          <input id="password" name="password" type="password" placeholder="Mínimo 6 caracteres" minlength="6" required />
         </div>
 
         <div class="full"><hr /></div>
 
         <div class="full">
           <label for="companyName">Nombre de la empresa</label>
-          <input id="companyName" type="text" placeholder="Mi Empresa SAS" required />
+          <input id="companyName" name="company_name" type="text" placeholder="Mi Empresa SAS" required />
         </div>
 
         <div>
           <label for="nit">NIT</label>
-          <input id="nit" type="text" placeholder="900123456-7" />
+          <input id="nit" name="company_nit" type="text" placeholder="900123456-7" />
         </div>
 
         <div>
           <label for="website">Sitio web</label>
-          <input id="website" type="url" placeholder="https://miempresa.co" />
+          <input id="website" name="company_website" type="url" placeholder="https://miempresa.co" />
         </div>
 
         <div class="full">
           <label for="location">Ubicación</label>
-          <input id="location" type="text" placeholder="Villavicencio" />
+          <input id="location" name="company_location" type="text" placeholder="Villavicencio" />
+        </div>
+
+        <div class="full">
+          <label>Logo de la empresa (PNG/JPG/WEBP/GIF, máx 2MB)</label>
+          <div class="preview">
+            <input id="logo" name="logo" type="file" accept="image/*" />
+            <img id="logoPreview" alt="Vista previa" style="display:none;">
+          </div>
+          <div class="hint">Este logo aparecerá en las ofertas.</div>
         </div>
 
         <div class="full actions">
@@ -117,6 +129,21 @@
     const msg  = document.getElementById('msg');
     const cancelBtn = document.getElementById('cancelBtn');
 
+    // Preview de logo
+    const fileInput = document.getElementById('logo');
+    const preview   = document.getElementById('logoPreview');
+    fileInput.addEventListener('change', () => {
+      const f = fileInput.files?.[0];
+      if (f) {
+        const url = URL.createObjectURL(f);
+        preview.src = url;
+        preview.style.display = 'block';
+      } else {
+        preview.src = '';
+        preview.style.display = 'none';
+      }
+    });
+
     cancelBtn.onclick = () => history.back();
 
     function setMsg(text, ok=false){
@@ -129,14 +156,11 @@
       setMsg('');
       btn.disabled = true;
 
+      // Validaciones rápidas
       const repName = document.getElementById('repName').value.trim();
       const email   = document.getElementById('email').value.trim();
       const pass    = document.getElementById('password').value;
       const companyName = document.getElementById('companyName').value.trim();
-      const nit     = document.getElementById('nit').value.trim();
-      const website = document.getElementById('website').value.trim();
-      const location= document.getElementById('location').value.trim();
-
       if (!repName || !email || !pass || !companyName) {
         setMsg('Completa los campos obligatorios.', false);
         btn.disabled = false;
@@ -148,19 +172,11 @@
         return;
       }
 
-      const payload = {
-        email,
-        password: pass,
-        name: repName,
-        company: { name: companyName, nit, website, location }
-      };
+      // Enviar todo con FormData (incluye archivo si se seleccionó)
+      const fd = new FormData(form);
 
       try {
-        const res = await fetch('/api/auth/register-company', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+        const res = await fetch('/api/auth/register-company', { method: 'POST', body: fd });
         const json = await res.json();
 
         if (!res.ok) {
@@ -168,7 +184,6 @@
         } else {
           setMsg('Empresa registrada correctamente. Redirigiendo…', true);
 
-          // Guarda algo opcional en localStorage para UI (la sesión real es cookie)
           try {
             localStorage.setItem('user', JSON.stringify({
               id: json.userId ?? null,
@@ -177,7 +192,6 @@
             }));
           } catch {}
 
-          // Redirige al dashboard de empresa (ajusta si usas otro)
           setTimeout(() => {
             const params = new URLSearchParams(location.search);
             const next = params.get('next') || '/dashboard.html';

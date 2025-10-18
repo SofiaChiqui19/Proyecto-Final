@@ -7,11 +7,12 @@
   <link rel="stylesheet" href="css/styles.css">
   <style>
     body { background:#f5f7fb; font-family: system-ui, Arial, sans-serif; margin:0; }
-    header { background:#1abc9c; color:#fff; padding:14px 18px; display:flex; justify-content:space-between; align-items:center; }
+    header { background:#1abc9c; color:#fff; padding:14px 18px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
     header a { color:#fff; text-decoration:none; font-weight:600; }
+    .h-actions a, .h-actions button { color:#fff; text-decoration:none; font-weight:600; background:transparent; border:none; cursor:pointer; }
+    .divider { opacity:.6; margin:0 8px; }
     main { max-width:980px; margin:28px auto; padding:0 16px; }
     h1 { margin:0; font-size:20px; }
-    nav { display:flex; gap:10px; align-items:center; }
     .btn { background:#1abc9c; color:#fff; border:none; border-radius:8px; padding:8px 12px; cursor:pointer; font-weight:600; }
     .btn.ghost { background:#ecf0f1; color:#2c3e50; }
     .list { margin: 18px 0 40px; }
@@ -34,10 +35,11 @@
 <body>
   <header>
     <h1>Mis Postulaciones</h1>
-    <nav>
-      <a href="/" class="btn ghost">🏠 Inicio</a>
-      <button id="logoutBtn" class="btn">Cerrar sesión</button>
-    </nav>
+    <div class="h-actions" id="navActions">
+      <a href="/">🏠 Inicio</a>
+      <span class="divider">|</span>
+      <!-- se rellenan links según rol -->
+    </div>
   </header>
 
   <main>
@@ -71,31 +73,74 @@
       return s === 'APPLIED' || s === 'REVIEWING';
     }
 
+    function renderHeaderLinks(user){
+      const nav = document.getElementById('navActions');
+      if (!nav) return;
+
+      // Limpia lo que hubiera después del "Inicio |"
+      nav.querySelectorAll('a[data-dyn], button[data-dyn], span[data-dyn]').forEach(n => n.remove());
+
+      if (!user){
+        const a = document.createElement('a');
+        a.href = '/login.html?next=/applications.html';
+        a.textContent = 'Iniciar sesión';
+        a.setAttribute('data-dyn','');
+        nav.appendChild(a);
+        return;
+      }
+
+      const isUser = user.role === 'USER';
+      const profileHref = isUser ? '/profile.html' : '/company-profile.html';
+      const profileText = isUser ? 'Mi perfil' : 'Perfil empresa';
+      const auxHref = isUser ? '/applications.html' : '/dashboard.html';
+      const auxText = isUser ? 'Mis postulaciones' : 'Dashboard empresa';
+
+      const div = document.createElement('span');
+      div.setAttribute('data-dyn','');
+      div.innerHTML = `
+        <span class="divider" data-dyn>|</span>
+        <a href="${profileHref}" data-dyn>${profileText}</a>
+        <span class="divider" data-dyn>|</span>
+        <a href="${auxHref}" data-dyn>${auxText}</a>
+        <span class="divider" data-dyn>|</span>
+        <button id="logoutBtn" data-dyn>Cerrar sesión</button>
+      `;
+      nav.appendChild(div);
+
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn){
+        logoutBtn.onclick = async () => {
+          try { await fetch('/api/auth/logout', { method:'POST' }); } catch {}
+          localStorage.removeItem('user');
+          location.href = '/';
+        };
+      }
+    }
+
     async function fetchSession() {
       try {
         const r = await fetch('/api/auth/me');
         const data = await r.json();
         state.user = data.user || null;
+
+        // Solo USERS pueden ver esta página
         if (!state.user) {
           alert('Debes iniciar sesión para ver tus postulaciones.');
           location.href = '/login.html?next=/applications.html';
           return;
         }
-        renderLogout();
+        if (state.user.role !== 'USER'){
+          alert('Esta página es solo para usuarios postulantes.');
+          location.href = '/dashboard.html';
+          return;
+        }
+
+        renderHeaderLinks(state.user);
         loadApplications();
       } catch (e) {
         console.error(e);
         document.getElementById('appsList').innerHTML = '<p class="empty">No pudimos verificar tu sesión.</p>';
       }
-    }
-
-    function renderLogout() {
-      const btn = document.getElementById('logoutBtn');
-      btn.onclick = async () => {
-        try { await fetch('/api/auth/logout', { method: 'POST' }); } catch {}
-        localStorage.removeItem('user');
-        location.href = '/';
-      };
     }
 
     async function loadApplications() {
@@ -104,7 +149,7 @@
         const r = await fetch('/api/applications/mine');
         const data = await r.json();
 
-        const apps = data.applications || data; // backend devuelve { ok, applications } (nuestro caso)
+        const apps = data.applications || data;
         if (!Array.isArray(apps) || !apps.length) {
           list.innerHTML = '<div class="empty">No tienes postulaciones aún. <br/>Visita la página de inicio para postularte a un empleo.</div>';
           return;
@@ -147,7 +192,6 @@
             const r = await fetch(`/api/applications/${id}`, { method: 'DELETE' });
             const j = await r.json().catch(()=>({}));
             if (r.ok) {
-              // refrescar lista
               await loadApplications();
             } else {
               alert(j.error || j.msg || 'Error al eliminar.');

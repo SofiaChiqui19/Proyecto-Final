@@ -1,73 +1,61 @@
-const express = require('express');
-const router = express.Router();
-const pool = require('../db');
-const bcrypt = require('bcrypt');
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// backend/routes/users.js
+const r = require('express').Router();
+const pool = require('../db'); // mysql2/promise
+const { requireLogin, requireRole } = require('../middleware/auth');
+const { uploadResume } = require('../middleware/upload');
 
-// ✅ Registrar usuario
-// Respuesta informativa para peticiones GET (evita el mensaje "Cannot GET /api/users/register" si alguien visita la URL en el navegador)
-router.get('/register', (req, res) => {
-  res.json({ message: 'Este endpoint acepta POST con {name, email, password}. Usa el formulario o una petición POST.' });
-});
-
-router.post('/register', async (req, res) => {
+// GET /api/users/me -> datos del usuario logueado (USER o EMPLOYER)
+r.get('/me', requireLogin, async (req, res) => {
   try {
-    const { name, email, password } = req.body;
-
-    // Validar datos
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: 'Todos los campos son obligatorios' });
-    }
-    if (!EMAIL_RE.test(email)) {
-      return res.status(400).json({ error: 'Formato de correo inválido' });
-    }
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
-    }
-
-    // Verificar email duplicado
-    pool.query('SELECT id FROM users WHERE email = ?', [email], async (err, rows) => {
-      if (err) {
-        console.error('Error SQL al verificar email:', err);
-        return res.status(500).json({ error: 'Error al verificar email' });
-      }
-      if (rows.length > 0) return res.status(409).json({ error: 'El correo ya está registrado' });
-
-      // Encriptar contraseña
-      const hashed = await bcrypt.hash(password, 10);
-      // Insertar en BD
-      pool.query(
-        'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
-        [name, email, hashed],
-        (err2, results2) => {
-          if (err2) {
-            console.error('❌ Error SQL al insertar usuario:', err2);
-            return res.status(500).json({ error: 'Error al registrar usuario' });
-          }
-          res.json({ message: 'Usuario registrado correctamente ✅', userId: results2.insertId, name, email });
-        }
-      );
-    });
-  } catch (error) {
-    console.error('❌ Error en el servidor:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    const uid = req.session.user.id;
+    const [rows] = await pool.execute(
+      'SELECT id, name, email, role, resume_url FROM users WHERE id = ? LIMIT 1',
+      [uid]
+    );
+    if (!rows.length) return res.status(404).json({ ok:false, msg:'Usuario no encontrado' });
+    res.json({ ok:true, user: rows[0] });
+  } catch (e) {
+    console.error('GET /users/me', e);
+    res.status(500).json({ ok:false, msg:'Error al obtener usuario' });
   }
 });
 
-// ✅ Login (autenticación básica)
-router.post('/login', (req, res) => {
-  const { email, password } = req.body;
-  pool.query('SELECT id, name, password FROM users WHERE email = ?', [email], async (err, results) => {
-    if (err) return res.status(500).json({ error: 'Error al iniciar sesión' });
-    if (results.length === 0) return res.status(400).json({ error: 'Usuario no encontrado' });
+// PATCH /api/users/me -> actualizar nombre (solo USER edita su nombre aquí)
+r.patch('/me', requireRole('USER'), async (req, res) => {
+  try {
+    const uid = req.session.user.id;
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ ok:false, msg:'El nombre es obligatorio' });
 
-    const user = results[0];
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ error: 'Contraseña incorrecta' });
+    await pool.execute('UPDATE users SET name = ? WHERE id = ?', [name, uid]);
+    // refrescar sesión
+    req.session.user.name = name;
+    res.json({ ok:true, msg:'Perfil actualizado' });
+  } catch (e) {
+    console.error('PATCH /users/me', e);
+    res.status(500).json({ ok:false, msg:'Error al actualizar perfil' });
+  }
+});
 
-    // Devolver solo campos necesarios (no la contraseña)
-    res.json({ message: 'Inicio de sesión exitoso ✅', user: { id: user.id, name: user.name } });
+// POST /api/users/me/resume -> subir CV PDF
+r.post('/me/resume', requireRole('USER'), (req, res, next) => {
+  uploadResume(req, res, async (err) => {
+    if (err) {
+      console.error('upload resume error:', err.message);
+      return res.status(400).json({ ok:false, msg: err.message || 'Archivo inválido' });
+    }
+    if (!req.file) return res.status(400).json({ ok:false, msg:'No se adjuntó archivo' });
+
+    try {
+      const uid = req.session.user.id;
+      const url = `/uploads/resumes/${req.file.filename}`;
+      await pool.execute('UPDATE users SET resume_url = ? WHERE id = ?', [url, uid]);
+      res.json({ ok:true, msg:'CV subido', resume_url: url });
+    } catch (e2) {
+      console.error('save resume url error:', e2);
+      res.status(500).json({ ok:false, msg:'Error guardando CV' });
+    }
   });
 });
 
-module.exports = router;
+module.exports = r;

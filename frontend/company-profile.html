@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Perfil de empresa</title>
+  <style>
+    body{ font-family: system-ui, Arial, sans-serif; background:#f5f7fb; margin:0; }
+    header{ background:#1abc9c; color:#fff; padding:14px 18px; display:flex; justify-content:space-between; align-items:center; }
+    header a{ color:#fff; text-decoration:none; font-weight:600; }
+    main{ max-width:900px; margin:28px auto; padding:0 16px; }
+    .card{ background:#fff; border-radius:12px; box-shadow:0 10px 24px rgba(0,0,0,.06); padding:18px; }
+    label{ display:block; margin:10px 0 6px; color:#2c3e50; font-weight:600; }
+    input[type="text"], input[type="url"]{ width:100%; padding:10px 12px; border:1px solid #dfe6e9; border-radius:8px; background:#fbfbfb; outline:none; }
+    input[type="file"]{ margin-top:8px; }
+    .row{ display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+    .actions{ display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; }
+    .btn{ background:#1abc9c; color:#fff; border:none; border-radius:8px; padding:10px 12px; cursor:pointer; font-weight:600; }
+    .ghost{ background:#ecf0f1; color:#2c3e50; }
+    .muted{ color:#7f8c8d; }
+    .logo{ width:96px;height:96px;object-fit:cover;border-radius:12px;border:1px solid #eee;background:#fff; }
+    .row3{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap:14px; }
+    @media (max-width:800px){ .row3{ grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/">← Volver</a>
+    <div id="navRight"></div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2 style="margin:0 0 10px">Perfil de empresa</h2>
+
+      <div class="row3">
+        <div>
+          <label>Nombre de la empresa</label>
+          <input id="name" type="text" placeholder="Mi Empresa SAS" />
+        </div>
+        <div>
+          <label>NIT</label>
+          <input id="nit" type="text" placeholder="900123456-7" />
+        </div>
+        <div>
+          <label>Ubicación</label>
+          <input id="location" type="text" placeholder="Villavicencio" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:6px;">
+        <div>
+          <label>Sitio web</label>
+          <input id="website" type="url" placeholder="https://miempresa.co" />
+        </div>
+        <div>
+          <label>Logo</label>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <img id="logoPreview" class="logo" src="/img/company-placeholder.png" alt="Logo" />
+            <input id="logoFile" type="file" accept="image/*" />
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="saveBtn" class="btn">Guardar</button>
+        <button id="uploadLogoBtn" class="btn">Subir/Actualizar logo</button>
+        <a class="ghost btn" href="/dashboard.html">Ir al dashboard</a>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const $ = s => document.querySelector(s);
+    const PLACEHOLDER = '/img/company-placeholder.png';
+    let me = null, company = null;
+
+    function renderHeader(){
+      const box = $('#navRight');
+      if (!me){
+        box.innerHTML = '<a href="/login.html">Iniciar sesión</a>';
+        return;
+      }
+      box.innerHTML = `
+        <span>${me.name || ''} · ${me.role || ''}</span>
+        <span style="opacity:.6;margin:0 8px;">|</span>
+        <a href="/dashboard.html">Dashboard empresa</a>
+        <span style="opacity:.6;margin:0 8px;">|</span>
+        <button id="logoutBtn" class="ghost btn">Cerrar sesión</button>
+      `;
+      $('#logoutBtn').onclick = async () => {
+        try{ await fetch('/api/auth/logout',{method:'POST'});}catch{}
+        localStorage.removeItem('user');
+        location.href = '/';
+      };
+    }
+
+    async function loadMe(){
+      const r = await fetch('/api/auth/me');
+      const j = await r.json();
+      me = j.user || null;
+      if (!me){
+        location.href = '/login.html?next=/company-profile.html';
+        return;
+      }
+      if (me.role !== 'EMPLOYER'){
+        alert('Esta página es solo para empresas.');
+        location.href = '/';
+        return;
+      }
+      renderHeader();
+    }
+
+    async function loadCompany(){
+      const r = await fetch('/api/companies/me');
+      const j = await r.json();
+      if (!j.ok) { alert(j.msg || 'No se pudo cargar empresa'); return; }
+      company = j.company;
+      $('#name').value = company.name || '';
+      $('#nit').value = company.nit || '';
+      $('#website').value = company.website || '';
+      $('#location').value = company.location || '';
+      $('#logoPreview').src = company.logo_url || PLACEHOLDER;
+    }
+
+    async function saveCompany(){
+      const payload = {
+        name: $('#name').value.trim(),
+        nit: $('#nit').value.trim(),
+        website: $('#website').value.trim(),
+        location: $('#location').value.trim()
+      };
+      const r = await fetch('/api/companies/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const j = await r.json();
+      if (r.ok) alert('Empresa actualizada');
+      else alert(j.msg || 'Error al actualizar');
+    }
+
+    async function uploadLogo(){
+      const f = $('#logoFile').files?.[0];
+      if (!f) return alert('Adjunta una imagen');
+      const fd = new FormData();
+      fd.append('logo', f);
+      const r = await fetch('/api/companies/me/logo', { method:'POST', body: fd });
+      const j = await r.json();
+      if (r.ok){
+        $('#logoPreview').src = j.logo_url || PLACEHOLDER;
+        alert('Logo subido');
+      } else {
+        alert(j.msg || j.error || 'Error al subir logo');
+      }
+    }
+
+    $('#saveBtn').addEventListener('click', saveCompany);
+    $('#uploadLogoBtn').addEventListener('click', uploadLogo);
+
+    (async function init(){
+      await loadMe();
+      await loadCompany();
+    })();
+  </script>
+</body>
+</html>

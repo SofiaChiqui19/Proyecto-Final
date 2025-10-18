@@ -42,12 +42,32 @@ const applicationsRoutes = require('./routes/applications');
 const adminRoutes = require('./routes/admin');          // 👈 NUEVO
 const seedRoutes = require('./routes/seed');
 
+const profileRoutes = require('./routes/profile');
+
+const companiesRoutes = require('./routes/companies');
+const usersRoutes = require('./routes/users'); // este users es el de perfil
+
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/jobs', jobsRoutes);
 app.use('/api/applications', applicationsRoutes);
 app.use('/api/admin', adminRoutes);                     // 👈 NUEVO (solo ADMIN)
 app.use('/api/seed', seedRoutes);
+
+
+// Servir archivos subidos (logos)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+
+app.use('/api/companies', companiesRoutes);
+
+app.use('/api/profile', profileRoutes);
+
+
+
+app.use('/api/companies', companiesRoutes);
+app.use('/api/users', usersRoutes);
+
 
 // --- RUTAS PÚBLICAS DEL FRONTEND ---
 

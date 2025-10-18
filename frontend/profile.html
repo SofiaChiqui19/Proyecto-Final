@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mi perfil</title>
+  <style>
+    body{ font-family: system-ui, Arial, sans-serif; background:#f5f7fb; margin:0; }
+    header{ background:#1abc9c; color:#fff; padding:14px 18px; display:flex; justify-content:space-between; align-items:center; }
+    header a{ color:#fff; text-decoration:none; font-weight:600; }
+    main{ max-width:900px; margin:28px auto; padding:0 16px; }
+    .card{ background:#fff; border-radius:12px; box-shadow:0 10px 24px rgba(0,0,0,.06); padding:18px; }
+    label{ display:block; margin:10px 0 6px; color:#2c3e50; font-weight:600; }
+    input[type="text"], input[type="email"]{ width:100%; padding:10px 12px; border:1px solid #dfe6e9; border-radius:8px; background:#fbfbfb; outline:none; }
+    input[type="file"]{ margin-top:8px; }
+    .row{ display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+    .actions{ display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; }
+    .btn{ background:#1abc9c; color:#fff; border:none; border-radius:8px; padding:10px 12px; cursor:pointer; font-weight:600; }
+    .ghost{ background:#ecf0f1; color:#2c3e50; }
+    .muted{ color:#7f8c8d; }
+    .pill{ background:#ecf0f1; border-radius:999px; padding:4px 10px; font-size:12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/">← Volver</a>
+    <div id="navRight"></div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2 style="margin:0 0 10px">Mi perfil</h2>
+
+      <div class="row">
+        <div>
+          <label>Nombre</label>
+          <input id="name" type="text" placeholder="Tu nombre" />
+        </div>
+        <div>
+          <label>Correo</label>
+          <input id="email" type="email" disabled />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="saveBtn" class="btn">Guardar</button>
+      </div>
+
+      <hr style="margin:18px 0; border:none; border-top:1px solid #eee" />
+
+      <div>
+        <h3 style="margin:0 0 6px">Hoja de vida (PDF)</h3>
+        <div id="cvBox" class="muted">No has subido un CV aún.</div>
+        <input id="cvFile" type="file" accept="application/pdf" />
+        <div class="actions">
+          <button id="uploadCvBtn" class="btn">Subir/Actualizar PDF</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const $ = s => document.querySelector(s);
+    let me = null;
+
+    function renderHeader(){
+      const box = $('#navRight');
+      if (!me){
+        box.innerHTML = '<a href="/login.html">Iniciar sesión</a>';
+        return;
+      }
+      box.innerHTML = `
+        <span>${me.name || ''} · ${me.role || ''}</span>
+        <span style="opacity:.6;margin:0 8px;">|</span>
+        <a href="/applications.html">Mis postulaciones</a>
+        <span style="opacity:.6;margin:0 8px;">|</span>
+        <button id="logoutBtn" class="ghost btn">Cerrar sesión</button>
+      `;
+      $('#logoutBtn').onclick = async () => {
+        try{ await fetch('/api/auth/logout',{method:'POST'});}catch{}
+        localStorage.removeItem('user');
+        location.href = '/';
+      };
+    }
+
+    async function loadMe(){
+      const r = await fetch('/api/users/me');
+      const j = await r.json();
+      if (!j.ok) throw new Error('sesión');
+      me = j.user;
+      renderHeader();
+
+      // Solo USER debe entrar aquí
+      if (me.role !== 'USER'){
+        alert('Esta página es solo para usuarios postulantes.');
+        location.href = '/dashboard.html';
+        return;
+      }
+
+      $('#name').value = me.name || '';
+      $('#email').value = me.email || '';
+      renderCV(me.resume_url);
+    }
+
+    function renderCV(url){
+      const box = $('#cvBox');
+      if (url){
+        box.innerHTML = `Tu CV: <a href="${url}" target="_blank" class="pill">Ver PDF</a>`;
+      } else {
+        box.textContent = 'No has subido un CV aún.';
+      }
+    }
+
+    async function saveProfile(){
+      const name = $('#name').value.trim();
+      if (!name) return alert('El nombre es obligatorio');
+      const r = await fetch('/api/users/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ name })
+      });
+      const j = await r.json();
+      if (r.ok) { alert('Perfil actualizado'); }
+      else { alert(j.msg || j.error || 'Error al actualizar'); }
+    }
+
+    async function uploadCV(){
+      const f = $('#cvFile').files?.[0];
+      if (!f) return alert('Adjunta un PDF');
+      const fd = new FormData();
+      fd.append('resume', f);
+      const r = await fetch('/api/users/me/resume', { method:'POST', body: fd });
+      const j = await r.json();
+      if (r.ok){
+        renderCV(j.resume_url);
+        alert('CV subido');
+      } else {
+        alert(j.msg || j.error || 'Error al subir CV');
+      }
+    }
+
+    $('#saveBtn').addEventListener('click', saveProfile);
+    $('#uploadCvBtn').addEventListener('click', uploadCV);
+
+    (async function init(){
+      try { await loadMe(); } catch { location.href = '/login.html?next=/profile.html'; }
+    })();
+  </script>
+</body>
+</html>

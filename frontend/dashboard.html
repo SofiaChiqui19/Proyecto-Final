@@ -8,10 +8,10 @@
     body { font-family: system-ui, Arial, sans-serif; background:#f5f7fb; margin:0; }
     header { background:#1abc9c; color:#fff; padding:14px 18px; display:flex; justify-content:space-between; align-items:center; }
     header a { color:#fff; text-decoration:none; font-weight:600; }
-    main { max-width:1000px; margin:28px auto; padding:0 16px; }
+    main { max-width:1100px; margin:28px auto; padding:0 16px; }
     h2 { margin:8px 0 12px; color:#2c3e50; }
-    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:18px; }
-    @media (max-width:900px){ .grid { grid-template-columns: 1fr; } }
+    .grid { display:grid; grid-template-columns: 1.3fr 1fr; gap:18px; }
+    @media (max-width:1000px){ .grid { grid-template-columns: 1fr; } }
     .card { background:#fff; border-radius:12px; box-shadow:0 10px 24px rgba(0,0,0,.06); padding:16px; }
     input, textarea { width:100%; padding:10px 12px; border:1px solid #dfe6e9; border-radius:8px; background:#fbfbfb; outline:none; }
     textarea { min-height:110px; resize:vertical; }
@@ -32,6 +32,12 @@
     .reject-btn { background:#e74c3c; }
     .review-btn { background:#f39c12; color:#fff; }
     button:disabled { opacity:.55; cursor:not-allowed; }
+
+    /* Empresa */
+    .company-head { display:flex; gap:16px; align-items:flex-start; }
+    .logo-wrap { width:110px; height:110px; border-radius:12px; border:1px solid #e9ecef; background:#fafafa; display:grid; place-items:center; overflow:hidden; }
+    .logo-wrap img { width:100%; height:100%; object-fit:cover; }
+    .hint { color:#7f8c8d; font-size:12px; }
   </style>
 </head>
 <body>
@@ -44,7 +50,27 @@
   </header>
 
   <main>
-    <div class="grid">
+    <!-- ====== Bloque: Mi empresa + Logo ====== -->
+    <section class="card" id="companyCard">
+      <h2>Mi empresa</h2>
+      <div class="company-head">
+        <div class="logo-wrap" id="logoBox">
+          <span class="muted">Sin logo</span>
+        </div>
+        <div style="flex:1">
+          <div id="companyInfo" class="muted">Cargando información…</div>
+          <div class="actions" style="margin-top:10px;">
+            <input id="logoInput" type="file" accept="image/png,image/jpeg,image/webp" />
+            <button id="uploadLogoBtn">Subir/Actualizar logo</button>
+            <button id="clearLogoBtn" class="ghost">Quitar logo</button>
+          </div>
+          <div class="hint">Formatos: JPG/PNG/WEBP. Máx ~2–3MB recomendado.</div>
+          <div id="logoMsg" class="muted" style="margin-top:6px;"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid" style="margin-top:18px;">
       <!-- Crear empleo -->
       <section class="card">
         <h2>Publicar empleo</h2>
@@ -76,13 +102,12 @@
   </main>
 
   <script>
-    const state = { user:null, selectedJob:null };
+    const state = { user:null, selectedJob:null, company:null, logoPreviewURL:null };
 
-    // Util
     const $ = (sel) => document.querySelector(sel);
     const fmtMoney = (n) => n == null || n === '' ? '—' : new Intl.NumberFormat('es-CO').format(Number(n));
 
-    // Sesión
+    // ===== Sesión =====
     async function fetchMe(){
       const r = await fetch('/api/auth/me');
       const data = await r.json();
@@ -107,7 +132,104 @@
       location.href = '/';
     }
 
-    // Crear empleo
+    // ===== Empresa / Logo =====
+    function setLogoMsg(t){ $('#logoMsg').textContent = t || ''; }
+
+    function renderCompany(){
+      const box = $('#companyInfo');
+      if (!state.company) {
+        box.textContent = 'No se pudo cargar la empresa.';
+        return;
+      }
+      const c = state.company;
+      const html = `
+        <div><b>${c.name || '—'}</b></div>
+        <div class="meta">NIT: ${c.nit || '—'} · Ubicación: ${c.location || '—'} ${c.website ? `· <a href="${c.website}" target="_blank" rel="noopener">Sitio</a>` : ''}</div>
+      `;
+      box.innerHTML = html;
+
+      const logoBox = $('#logoBox');
+      logoBox.innerHTML = '';
+      if (c.logo_url) {
+        const ts = Date.now(); // cache-bust
+        const img = document.createElement('img');
+        img.src = `${c.logo_url}?t=${ts}`;
+        img.alt = 'Logo de la empresa';
+        logoBox.appendChild(img);
+      } else {
+        logoBox.innerHTML = '<span class="muted">Sin logo</span>';
+      }
+    }
+
+    async function loadCompany(){
+      try {
+        const r = await fetch('/api/companies/me');
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.msg || 'error');
+        state.company = j.company || null;
+        renderCompany();
+      } catch (e) {
+        console.error('loadCompany error:', e);
+        state.company = null;
+        renderCompany();
+      }
+    }
+
+    // Preview local del archivo
+    $('#logoInput').addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (state.logoPreviewURL) URL.revokeObjectURL(state.logoPreviewURL);
+      state.logoPreviewURL = URL.createObjectURL(file);
+
+      const logoBox = $('#logoBox');
+      logoBox.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = state.logoPreviewURL;
+      img.alt = 'Preview logo';
+      logoBox.appendChild(img);
+      setLogoMsg('Preview listo. Haz clic en "Subir/Actualizar logo" para guardar.');
+    });
+
+    async function uploadLogo(){
+      const input = $('#logoInput');
+      const file = input.files?.[0];
+      if (!file) { setLogoMsg('Selecciona una imagen primero.'); return; }
+
+      const fd = new FormData();
+      fd.append('logo', file);
+
+      setLogoMsg('Subiendo logo…');
+      try {
+        const r = await fetch('/api/companies/me/logo', { method: 'POST', body: fd });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || j.msg || 'No se pudo subir');
+        setLogoMsg('Logo actualizado ✅');
+        await loadCompany(); // refresca datos y quita el preview local
+        if (state.logoPreviewURL) { URL.revokeObjectURL(state.logoPreviewURL); state.logoPreviewURL = null; }
+        input.value = '';
+      } catch (e) {
+        console.error('uploadLogo error:', e);
+        setLogoMsg('Error al subir el logo.');
+      }
+    }
+
+    async function clearLogo(){
+      if (!confirm('¿Quitar el logo actual?')) return;
+      setLogoMsg('Quitando logo…');
+      try {
+        const r = await fetch('/api/companies/me/logo/clear', { method: 'PATCH' });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || j.msg || 'error');
+        setLogoMsg('Logo removido ✅');
+        await loadCompany();
+      } catch (e) {
+        console.error('clearLogo error:', e);
+        setLogoMsg('No se pudo quitar el logo.');
+      }
+    }
+
+    // ===== Empleos =====
     async function createJob(){
       const t = $('#title').value.trim();
       const d = $('#description').value.trim();
@@ -131,7 +253,6 @@
     }
     function setFormMsg(t){ $('#formMsg').textContent = t || ''; }
 
-    // Mis empleos
     async function loadMine(){
       const list = $('#mineList');
       list.innerHTML = '<li class="empty">Cargando…</li>';
@@ -161,7 +282,7 @@
       });
     }
 
-    // Ver candidatos por job (con botones de estado)
+    // ===== Candidatos (con botones de estado) =====
     async function loadApplicants(jobId){
       state.selectedJob = jobId;
       $('#appsBox').textContent = 'Cargando candidatos…';
@@ -204,7 +325,6 @@
         `;
       }).join('');
 
-      // Vincular acciones
       document.querySelectorAll('.hire-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const appId = Number(e.target.closest('[data-app]').dataset.app);
@@ -226,7 +346,6 @@
       });
     }
 
-    // Cambiar estado (PATCH /api/applications/:id)
     async function updateStatus(appId, status){
       try {
         const r = await fetch(`/api/applications/${appId}`, {
@@ -239,7 +358,6 @@
           alert(j.msg || j.error || 'No se pudo actualizar el estado');
           return;
         }
-        // recargar candidatos del job actual
         await loadApplicants(state.selectedJob);
       } catch (e) {
         console.error('updateStatus error:', e);
@@ -247,15 +365,18 @@
       }
     }
 
-    // Eventos
+    // ===== Eventos =====
     $('#createBtn').addEventListener('click', createJob);
     $('#clearBtn').addEventListener('click', ()=>{ $('#title').value=''; $('#description').value=''; $('#salary').value=''; setFormMsg(''); });
     $('#logoutBtn').addEventListener('click', logout);
+    $('#uploadLogoBtn').addEventListener('click', uploadLogo);
+    $('#clearLogoBtn').addEventListener('click', clearLogo);
 
-    // Init
+    // ===== Init =====
     (async function(){
       await fetchMe();
-      await loadMine();
+      await loadCompany(); // carga y pinta empresa + logo
+      await loadMine();    // mis empleos
     })();
   </script>
 </body>

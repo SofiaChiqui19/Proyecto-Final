@@ -3,9 +3,7 @@ const router = require('express').Router();
 const pool = require('../db'); // mysql2/promise
 const { requireRole } = require('../middleware/auth');
 
-/**
- * Helpers
- */
+/** Helpers */
 function normalizeSalary(s) {
   if (s === undefined || s === null || s === '') return null;
   const n = Number(s);
@@ -77,17 +75,23 @@ router.get('/mine', requireRole('EMPLOYER'), async (req, res) => {
 /**
  * GET /api/jobs
  * Listado público (ARRAY plano, para frontend actual)
+ * Query opcional: limit, offset
+ * 👉 Incluye logo de la empresa (c.logo_url AS logo)
  */
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
+    const limit  = Math.min(Math.max(parseInt(req.query.limit  || '50', 10), 1), 100);
+    const offset = Math.max(parseInt(req.query.offset || '0',  10), 0);
+
     const [rows] = await pool.execute(
       `SELECT j.id, j.title, j.description, j.salary, j.created_at,
-              c.name AS company, c.location AS location
+              c.name AS company, c.location AS location, c.logo_url AS logo
          FROM jobs j
          JOIN companies c ON c.id = j.company_id
-        ORDER BY j.created_at DESC`
+        ORDER BY j.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}`
     );
-    // 👇 devolvemos el array directo (compatibilidad con index.html)
+    // Por compatibilidad devolvemos directamente el array (tu main.js ya tolera ambas formas)
     res.json(rows);
   } catch (err) {
     console.error('GET /api/jobs error:', err.message);
@@ -98,15 +102,14 @@ router.get('/', async (_req, res) => {
 /**
  * GET /api/jobs/search
  * Búsqueda + paginación (objeto con metadata)
- * Query:
- *  - q: término (title/description/company)
- *  - limit, offset
+ * Query: q, limit, offset
+ * 👉 Incluye logo
  */
 router.get('/search', async (req, res) => {
   try {
-    const q = (req.query.q || '').trim();
-    const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10), 1), 100);
-    const offset = Math.max(parseInt(req.query.offset || '0', 10), 0);
+    const q      = (req.query.q || '').trim();
+    const limit  = Math.min(Math.max(parseInt(req.query.limit  || '50', 10), 1), 100);
+    const offset = Math.max(parseInt(req.query.offset || '0',  10), 0);
 
     const params = [];
     let where = '';
@@ -118,7 +121,7 @@ router.get('/search', async (req, res) => {
 
     const [rows] = await pool.execute(
       `SELECT j.id, j.title, j.description, j.salary, j.created_at,
-              c.name AS company, c.location AS location
+              c.name AS company, c.location AS location, c.logo_url AS logo
          FROM jobs j
          JOIN companies c ON c.id = j.company_id
         ${where}
@@ -136,14 +139,15 @@ router.get('/search', async (req, res) => {
 
 /**
  * GET /api/jobs/:id
- * Detalle público de un empleo
+ * Detalle público de un empleo (👉 incluye logo y website)
  */
 router.get('/:id', async (req, res) => {
   try {
     const jobId = Number(req.params.id);
     const [rows] = await pool.execute(
       `SELECT j.id, j.title, j.description, j.salary, j.created_at,
-              c.id AS company_id, c.name AS company, c.location
+              c.id AS company_id, c.name AS company, c.location,
+              c.logo_url AS logo, c.website AS website
          FROM jobs j
          JOIN companies c ON c.id = j.company_id
         WHERE j.id = ?
@@ -160,8 +164,7 @@ router.get('/:id', async (req, res) => {
 
 /**
  * PUT /api/jobs/:id
- * Actualiza un empleo (solo EMPLOYER dueño). Requiere title & description.
- * Body: { title, description, salary? }
+ * Actualiza un empleo (solo EMPLOYER dueño)
  */
 router.put('/:id', requireRole('EMPLOYER'), async (req, res) => {
   try {
@@ -222,9 +225,11 @@ router.patch('/:id', requireRole('EMPLOYER'), async (req, res) => {
     const fields = [];
     const values = [];
 
-    if (req.body?.title) { fields.push('title = ?'); values.push(String(req.body.title).trim()); }
+    if (req.body?.title)       { fields.push('title = ?');       values.push(String(req.body.title).trim()); }
     if (req.body?.description) { fields.push('description = ?'); values.push(String(req.body.description).trim()); }
-    if (req.body?.salary !== undefined) { fields.push('salary = ?'); values.push(normalizeSalary(req.body.salary)); }
+    if (req.body?.salary !== undefined) {
+      fields.push('salary = ?'); values.push(normalizeSalary(req.body.salary));
+    }
 
     if (!fields.length) return res.status(400).json({ ok: false, msg: 'No hay campos para actualizar' });
 

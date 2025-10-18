@@ -4,6 +4,32 @@ const router = express.Router();
 const pool = require('../db');        // mysql2/promise
 const bcrypt = require('bcrypt');
 
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+
+/* ========= MULTER: subida de logo de empresa ========= */
+const logosDir = path.join(__dirname, '..', 'uploads', 'logos');
+if (!fs.existsSync(logosDir)) fs.mkdirSync(logosDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, logosDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const safe = Date.now() + '-' + Math.random().toString(36).slice(2) + ext;
+    cb(null, safe);
+  },
+});
+const fileFilter = (_req, file, cb) => {
+  const ok = /image\/(png|jpe?g|webp|gif)/i.test(file.mimetype);
+  cb(ok ? null : new Error('Tipo de archivo no permitido'), ok);
+};
+const uploadLogo = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+}).single('logo'); // <input name="logo">
+
 /* ======================
  * Registro de USUARIO (ROLE: USER)
  * ====================== */
@@ -69,48 +95,72 @@ router.post('/logout', (req, res) => {
 });
 
 /* ==========================================
- * Registrar EMPRESA (ROLE: EMPLOYER) + company
+ * Registrar EMPRESA (ROLE: EMPLOYER) + company + logo
+ * Recibe multipart/form-data:
+ *  - email, password, name (representante)
+ *  - company_name, company_nit, company_website, company_location
+ *  - logo (file)
  * ========================================== */
-router.post('/register-company', async (req, res) => {
-  const conn = await pool.getConnection();
-  try {
-    const { email, password, name, company } = req.body || {};
-    if (!email || !password || !company?.name) {
-      return res.status(400).json({ error: 'email, password y company.name son obligatorios' });
+router.post('/register-company', (req, res) => {
+  // Primero procesamos el multipart (multer)
+  uploadLogo(req, res, async (uploadErr) => {
+    if (uploadErr) {
+      console.error('multer error:', uploadErr.message);
+      return res.status(400).json({ error: uploadErr.message || 'Archivo inválido' });
     }
 
-    const [exists] = await conn.execute('SELECT id FROM users WHERE email = ? LIMIT 1', [email]);
-    if (exists.length) return res.status(409).json({ error: 'Email ya registrado' });
+    const conn = await pool.getConnection();
+    try {
+      const email        = (req.body.email || '').trim();
+      const password     = req.body.password || '';
+      const repName      = (req.body.name || '').trim(); // representante
+      const companyName  = (req.body.company_name || '').trim();
+      const nit          = (req.body.company_nit || '').trim() || null;
+      const website      = (req.body.company_website || '').trim() || null;
+      const location     = (req.body.company_location || '').trim() || null;
 
-    await conn.beginTransaction();
+      if (!email || !password || !companyName) {
+        return res.status(400).json({ error: 'email, password y company_name son obligatorios' });
+      }
 
-    const hashed = await bcrypt.hash(password, 10);
+      const [exists] = await conn.execute('SELECT id FROM users WHERE email = ? LIMIT 1', [email]);
+      if (exists.length) return res.status(409).json({ error: 'Email ya registrado' });
 
-    // 1) crear USER con rol EMPLOYER
-    const [uRes] = await conn.execute(
-      'INSERT INTO users (name, email, password, role) VALUES (?,?,?, "EMPLOYER")',
-      [name || null, email, hashed]
-    );
-    const userId = uRes.insertId;
+      await conn.beginTransaction();
 
-    // 2) crear COMPANY 1:1
-    const { name: companyName, nit, website, location } = company;
-    await conn.execute(
-      'INSERT INTO companies (user_id, name, nit, website, location) VALUES (?,?,?,?,?)',
-      [userId, companyName, nit || null, website || null, location || null]
-    );
+      const hashed = await bcrypt.hash(password, 10);
 
-    await conn.commit();
+      // 1) crear USER con rol EMPLOYER
+      const [uRes] = await conn.execute(
+        'INSERT INTO users (name, email, password, role) VALUES (?,?,?, "EMPLOYER")',
+        [repName || companyName, email, hashed]
+      );
+      const userId = uRes.insertId;
 
-    req.session.user = { id: userId, name: name || companyName, role: 'EMPLOYER' };
-    res.status(201).json({ message: 'Empresa registrada', userId, role: 'EMPLOYER' });
-  } catch (err) {
-    try { await conn.rollback(); } catch {}
-    console.error('register-company error:', err.code, err.sqlMessage || err.message);
-    res.status(500).json({ error: 'Error registrando empresa' });
-  } finally {
-    conn.release();
-  }
+      // 2) construir URL del logo (si se subió)
+      let logoUrl = null;
+      if (req.file) {
+        logoUrl = '/uploads/logos/' + req.file.filename;
+      }
+
+      // 3) crear COMPANY 1:1
+      await conn.execute(
+        'INSERT INTO companies (user_id, name, nit, website, location, logo_url) VALUES (?,?,?,?,?,?)',
+        [userId, companyName, nit, website, location, logoUrl]
+      );
+
+      await conn.commit();
+
+      req.session.user = { id: userId, name: repName || companyName, role: 'EMPLOYER' };
+      res.status(201).json({ message: 'Empresa registrada', userId, role: 'EMPLOYER', logo_url: logoUrl });
+    } catch (err) {
+      try { await conn.rollback(); } catch {}
+      console.error('register-company error:', err.code, err.sqlMessage || err.message);
+      res.status(500).json({ error: 'Error registrando empresa' });
+    } finally {
+      conn.release();
+    }
+  });
 });
 
 /* ======================
