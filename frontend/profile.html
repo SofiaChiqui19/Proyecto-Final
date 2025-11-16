@@ -127,76 +127,105 @@
   <!-- Footer moderno inyectado por nav.js -->
   <footer id="appFooter"></footer>
 
-  <script>
-    const $ = s => document.querySelector(s);
-    let me = null;
+<script>
+  const $ = s => document.querySelector(s);
+  let me = null;
 
-    async function loadMe(){
-      const r = await fetch('/api/users/me');
-      const j = await r.json();
-      if (!j.ok) throw new Error('sesión');
-      me = j.user;
+  function getToken() {
+    return localStorage.getItem("token");
+  }
 
-      // Solo USER
-      if (me.role !== 'USER'){
-        alert('Esta página es solo para usuarios postulantes.');
-        location.href = '/dashboard.html';
-        return;
-      }
+  async function loadMe() {
+  const r = await fetch('/api/auth/me', {
+    method: 'GET',
+    credentials: 'include'
+  });
 
-      $('#name').value = me.name || '';
-      $('#email').value = me.email || '';
-      renderCV(me.resume_url);
+  const j = await r.json();
+  if (!j.user) throw new Error("no-session");
+
+  me = j.user;
+
+  if (me.role !== 'USER') {
+    alert("Página solo para usuarios.");
+    location.href = '/';
+    return;
+  }
+
+  $('#name').value = me.name;
+  $('#email').value = me.email;
+}
+
+
+  function renderCV(url) {
+    const box = $('#cvBox');
+    if (url) {
+      box.classList.remove('muted');
+      box.innerHTML = `Tu CV: <a href="${url}" target="_blank" class="pill">Ver PDF</a>`;
+    } else {
+      box.classList.add('muted');
+      box.textContent = 'No has subido un CV aún.';
     }
+  }
 
-    function renderCV(url){
-      const box = $('#cvBox');
-      if (url){
-        box.classList.remove('muted');
-        box.innerHTML = `Tu CV: <a href="${url}" target="_blank" class="pill">Ver PDF</a>`;
-      } else {
-        box.classList.add('muted');
-        box.textContent = 'No has subido un CV aún.';
-      }
+  async function saveProfile() {
+    const name = $('#name').value.trim();
+    if (!name) return alert('El nombre es obligatorio');
+
+    const token = getToken();
+
+    const r = await fetch('/api/users/me', {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({ name })
+    });
+
+
+    const j = await r.json();
+    if (r.ok) alert('Perfil actualizado');
+    else alert(j.msg || j.error || 'Error al actualizar');
+  }
+
+  async function uploadCV() {
+    const f = $('#cvFile').files?.[0];
+    if (!f) return alert('Adjunta un PDF');
+    if (f.type !== 'application/pdf') return alert('El archivo debe ser PDF');
+
+    const token = getToken();
+    const fd = new FormData();
+    fd.append('resume', f);
+
+    const r = await fetch('/api/users/me/resume', {
+      method: 'POST',
+      credentials: 'include',
+      body: fd
+    });
+
+
+    const j = await r.json();
+    if (r.ok) {
+      renderCV(j.resume_url);
+      alert('CV subido');
+      $('#cvFile').value = '';
+    } else {
+      alert(j.msg || j.error || 'Error al subir CV');
     }
+  }
 
-    async function saveProfile(){
-      const name = $('#name').value.trim();
-      if (!name) return alert('El nombre es obligatorio');
-      const r = await fetch('/api/users/me', {
-        method: 'PATCH',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify({ name })
-      });
-      const j = await r.json();
-      if (r.ok) { alert('Perfil actualizado'); }
-      else { alert(j.msg || j.error || 'Error al actualizar'); }
+  $('#saveBtn').addEventListener('click', saveProfile);
+  $('#uploadCvBtn').addEventListener('click', uploadCV);
+
+  (async function init() {
+    try {
+      await loadMe();
+    } catch (e) {
+      console.warn("Error al cargar sesión:", e);
+      location.href = '/login.html?next=/profile.html';
     }
+  })();
+</script>
 
-    async function uploadCV(){
-      const f = $('#cvFile').files?.[0];
-      if (!f) return alert('Adjunta un PDF');
-      if (f.type !== 'application/pdf') return alert('El archivo debe ser PDF');
-      const fd = new FormData();
-      fd.append('resume', f);
-      const r = await fetch('/api/users/me/resume', { method:'POST', body: fd });
-      const j = await r.json();
-      if (r.ok){
-        renderCV(j.resume_url);
-        alert('CV subido');
-        $('#cvFile').value = '';
-      } else {
-        alert(j.msg || j.error || 'Error al subir CV');
-      }
-    }
 
-    $('#saveBtn').addEventListener('click', saveProfile);
-    $('#uploadCvBtn').addEventListener('click', uploadCV);
-
-    (async function init(){
-      try { await loadMe(); }
-      catch { location.href = '/login.html?next=/profile.html'; }
-    })();
-  </script>
 </body>
 </html>

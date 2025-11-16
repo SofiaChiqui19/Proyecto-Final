@@ -1,4 +1,3 @@
-// frontend/js/nav.js
 (function () {
   const EL = (tag, attrs={}, html='') => {
     const e = document.createElement(tag);
@@ -8,18 +7,25 @@
   };
 
   async function getMe(){
-    try{ const r = await fetch('/api/auth/me'); const j = await r.json(); return j.user || null; }
+    try{
+      const r = await fetch('/api/auth/me', {
+        method: 'GET',
+        credentials: 'include'
+      });
+      const j = await r.json();
+      return j.user || null;
+    }
     catch{ return null; }
   }
 
   function buildLinks(user){
-    // Links por rol
     const guest = [
       `<a href="/">Inicio</a>`,
       `<span class="divider">|</span>`,
       `<a href="/login.html">Iniciar sesión</a>`,
       `<span class="divider">|</span>`,
-      `<a href="/register.html">Registrarse</a>`
+      `<a href="/register.html">Registrarse</a>`,
+      `<a href="/register-company.html">Registrarse Empresa</a>`
     ];
 
     const userLinks = [
@@ -42,18 +48,9 @@
       `<button id="logoutBtn">Cerrar sesión</button>`
     ];
 
-    const adminLinks = [
-      `<a href="/">Inicio</a>`,
-      `<span class="divider">|</span>`,
-      `<a href="/admin.html">Panel Admin</a>`,
-      `<span class="divider">|</span>`,
-      `<button id="logoutBtn">Cerrar sesión</button>`
-    ];
-
     if (!user) return guest.join('');
     if (user.role === 'USER') return userLinks.join('');
     if (user.role === 'EMPLOYER') return employerLinks.join('');
-    if (user.role === 'ADMIN') return adminLinks.join('');
     return guest.join('');
   }
 
@@ -61,13 +58,17 @@
     const btn = document.getElementById('logoutBtn');
     if (!btn) return;
     btn.onclick = async () => {
-      try{ await fetch('/api/auth/logout', { method:'POST' }); }catch{}
-      localStorage.removeItem('user');
+      try{
+        await fetch('/api/auth/logout', { 
+          method:'POST',
+          credentials: 'include'
+        });
+      }catch{}
+
       location.href = '/';
     };
   }
 
-  // Rellena header/footer en la página
   async function renderSiteChrome(){
     const header = document.getElementById('appHeader');
     const footer = document.getElementById('appFooter');
@@ -103,8 +104,6 @@
     }
   }
 
-  // expone en window para poder llamar manualmente si hace falta
   window.renderSiteChrome = renderSiteChrome;
-  // autoinicializa
   document.addEventListener('DOMContentLoaded', renderSiteChrome);
 })();

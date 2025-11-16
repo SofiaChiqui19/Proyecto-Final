@@ -90,26 +90,36 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   };
 
   try {
-    // Usa la ruta correcta
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      // mismas origin: no hace falta credentials: 'include'
       body: JSON.stringify(data)
     });
 
     const result = await res.json();
 
     if (res.ok) {
-      // Guarda algo mínimo si quieres para mostrar en UI,
-      // pero la sesión real está en el servidor (cookie).
-      const user = { id: result.user?.id ?? null, name: result.user?.name ?? '', role: result.user?.role ?? '' };
+
+      // 🔥🔥🔥 GUARDAR TOKEN (FALTABA ESTO)
+      if (result.token) {
+        localStorage.setItem("token", result.token);
+      }
+
+      // Datos opcionales del usuario (para UI)
+      const user = {
+        id: result.user?.id ?? null,
+        name: result.user?.name ?? '',
+        role: result.user?.role ?? ''
+      };
       localStorage.setItem('user', JSON.stringify(user));
 
       alert(result.message || 'Login correcto');
+
+      // Redirección segura
       const params = new URLSearchParams(window.location.search);
       const next = params.get('next') || '/';
       window.location.href = next;
+
     } else {
       alert(result.error || 'Error al iniciar sesión');
     }
@@ -121,6 +131,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   }
 });
 </script>
+
 
 
 <footer id="appFooter"></footer>

@@ -3,12 +3,12 @@
 // ===== Estado de UI =====
 const state = {
   user: null,      // {id, name, role}
-  q: '',           // término actual de búsqueda
-  timer: null,     // debounce
-  mode: 'all',     // 'all' | 'search'
+  q: '',           
+  timer: null,
+  mode: 'all',
   limit: 10,
   offset: 0,
-  lastCount: 0     // cuántos trajo la última página
+  lastCount: 0
 };
 
 // ===== Utils =====
@@ -24,20 +24,28 @@ const snippet = (txt, max = 180) => {
 const setJobsHTML = (html) => { const el = $('#job-list'); if (el) el.innerHTML = html; };
 const showPager = (show) => { const p = $('#pager'); if (p) p.style.display = show ? 'block' : 'none'; };
 
-// Placeholder para logos inexistentes (pon uno en /frontend/img/company-placeholder.png si quieres)
 const PLACEHOLDER_LOGO = '/img/company-placeholder.png';
 
 // ===== Sesión =====
 async function fetchSession() {
   try {
-    const r = await fetch('/api/auth/me', { method: 'GET' });
+    const token = localStorage.getItem("token");
+
+    const r = await fetch('/api/auth/me', {
+      method: 'GET',
+      credentials: 'include'
+    });
+
+
     const data = await r.json();
+
     state.user = data.user || null;
     renderUserArea();
 
     if (state.user?.role === 'USER') {
       await updateApplicationsCount();
     }
+
   } catch (e) {
     console.error('fetchSession error:', e);
   }
@@ -52,7 +60,7 @@ function ensureProfileAnchor() {
       a = document.createElement('a');
       a.id = 'profileLink';
       a.style.marginLeft = '12px';
-      a.style.display = 'none'; // por defecto oculto; se muestra según rol
+      a.style.display = 'none';
       userArea.appendChild(a);
     }
   }
@@ -70,7 +78,6 @@ function renderUserArea() {
     if (logoutBtn) logoutBtn.style.display = 'inline-block';
 
     if (appsLink) {
-      // Link principal a la derecha del nombre
       if (state.user.role === 'USER') {
         appsLink.style.display = 'inline-block';
         appsLink.href = '/applications.html';
@@ -82,7 +89,6 @@ function renderUserArea() {
       }
     }
 
-    // Link de perfil según rol
     if (profileLink) {
       if (state.user.role === 'USER') {
         profileLink.style.display = 'inline-block';
@@ -93,7 +99,6 @@ function renderUserArea() {
         profileLink.href = '/company-profile.html';
         profileLink.textContent = 'Perfil empresa';
       } else {
-        // Otros roles, ocúltalo por ahora
         profileLink.style.display = 'none';
       }
     }
@@ -106,8 +111,11 @@ function renderUserArea() {
 
   if (logoutBtn) {
     logoutBtn.onclick = async () => {
-      try { await fetch('/api/auth/logout', { method: 'POST' }); } catch {}
-      localStorage.removeItem('user');
+      try {
+        await fetch('/api/auth/logout', { method: 'POST' });
+      } catch {}
+
+      localStorage.removeItem("token"); // 🔥 FIX IMPORTANTE
       location.reload();
     };
   }
@@ -163,13 +171,14 @@ function bindApplyButtons() {
     });
   });
 }
+
 function bindDetailLinks() {
   document.querySelectorAll('.detail-link').forEach((a) => {
-    a.addEventListener('click', () => { /* Hook opcional */ });
+    a.addEventListener('click', () => {});
   });
 }
 
-// ===== Cargar listado general (paginado) =====
+// ===== Cargar listado general =====
 async function loadJobs() {
   state.mode = 'all';
   const params = new URLSearchParams({
@@ -182,7 +191,6 @@ async function loadJobs() {
     const r = await fetch(`/api/jobs?${params.toString()}`);
     const data = await r.json();
 
-    // ⚠️ Acepta array plano o { jobs: [] }
     const jobs = Array.isArray(data) ? data : (data.jobs || []);
     state.lastCount = jobs.length;
 
@@ -202,7 +210,7 @@ async function loadJobs() {
   }
 }
 
-// ===== Búsqueda con paginación =====
+// ===== Búsqueda =====
 async function searchJobs(q) {
   const term = (q || '').trim();
   if (term.length < 2) {
@@ -243,7 +251,7 @@ async function searchJobs(q) {
   }
 }
 
-// ===== Paginador (ambos modos) =====
+// ===== Paginador =====
 function renderPager() {
   const pager = $('#pager');
   if (!pager) return;
@@ -336,10 +344,10 @@ async function applyToJob(jobId) {
   }
 }
 
-// ===== Bootstrap + eventos de buscador =====
+// ===== Bootstrap =====
 (async function init() {
-  await fetchSession(); // detecta sesión + pinta cabecera
-  await loadJobs();     // listado inicial
+  await fetchSession();
+  await loadJobs();
   attachPagerHandlers();
 
   const qInput = $('#q');
@@ -347,14 +355,12 @@ async function applyToJob(jobId) {
   const clearBtn = $('#clearBtn');
 
   if (qInput && searchBtn && clearBtn) {
-    // escribir → debounce
     qInput.addEventListener('input', withDebounce(() => {
       state.q = qInput.value;
-      state.offset = 0; // primera página
+      state.offset = 0;
       searchJobs(state.q);
     }, 400));
 
-    // Enter
     qInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -364,20 +370,18 @@ async function applyToJob(jobId) {
       }
     });
 
-    // Clic buscar
     searchBtn.addEventListener('click', () => {
       state.q = qInput.value;
       state.offset = 0;
       searchJobs(state.q);
     });
 
-    // Limpiar
     clearBtn.addEventListener('click', async () => {
       qInput.value = '';
       state.q = '';
       state.offset = 0;
       await loadJobs();
-      showPager(true); // seguimos con paginador activo en modo "all"
+      showPager(true);
       qInput.focus();
     });
   }

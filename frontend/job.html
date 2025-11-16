@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Detalle de empleo</title>
+
   <style>
     :root{
       --brand:#1abc9c;
@@ -13,65 +14,192 @@
       --card-bg:#fff;
       --page:#f5f7fb;
     }
-    body { font-family: system-ui, Arial, sans-serif; background:var(--page); margin:0; color:var(--ink); }
-    header { background:var(--brand); color:#fff; padding:14px 18px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
-    header a { color:#fff; text-decoration:none; font-weight:600; }
-    .h-actions a, .h-actions button { color:#fff; text-decoration:none; font-weight:600; background:transparent; border:none; cursor:pointer; }
-    .divider { opacity:.6; margin:0 8px; }
-    main { max-width:900px; margin:28px auto; padding:0 16px; }
-    .card { background:var(--card-bg); border-radius:12px; box-shadow:0 10px 24px rgba(0,0,0,.06); padding:18px; }
-    .top { display:flex; gap:16px; align-items:flex-start; }
-    .logo {
-      width:92px; height:92px; border-radius:14px; object-fit:cover; border:1px solid #eee; background:#fff;
-      flex:0 0 auto;
+
+    body {
+      font-family: system-ui, Arial, sans-serif;
+      background: var(--page);
+      margin: 0;
+      color: var(--ink);
     }
-    .meta { color:var(--muted); font-size:13px; }
-    .pill { background:var(--chip); border-radius:999px; padding:4px 10px; font-size:12px; display:inline-block; }
-    .btn { background:var(--brand); color:#fff; border:none; border-radius:8px; padding:10px 12px; cursor:pointer; font-weight:600; }
-    .btn.ghost { background:#ecf0f1; color:#2c3e50; }
-    .muted { color:#7f8c8d; }
-    .actions { margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; }
-    .company-link { color:#0b7b66; text-decoration:none; }
+
+    /* HEADER */
+    header {
+      background: var(--brand);
+      color: #fff;
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    header a {
+      color: #fff;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .h-actions a, .h-actions button {
+      color: #fff;
+      text-decoration: none;
+      font-weight: 600;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+    }
+    .divider {
+      opacity: .6;
+      margin: 0 8px;
+    }
+
+    /* CONTENIDO CENTRADO */
+    main {
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* CARD PRINCIPAL DEL EMPLEO */
+    .card {
+      background: var(--card-bg);
+      border-radius: 14px;
+      box-shadow: 0 10px 24px rgba(0,0,0,.06);
+      padding: 28px;
+      width: 100%;
+    }
+
+    .top {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .logo {
+      width: 110px;
+      height: 110px;
+      border-radius: 14px;
+      object-fit: cover;
+      border: 1px solid #eee;
+      background: #fff;
+      flex: 0 0 auto;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    .pill {
+      background: var(--chip);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 13px;
+      display: inline-block;
+      margin-top: 10px;
+    }
+
+    .btn {
+      background: var(--brand);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 18px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .btn.ghost {
+      background: #ecf0f1;
+      color: #2c3e50;
+    }
+
+    .muted {
+      color: #7f8c8d;
+    }
+
+    .company-link {
+      color: #0b7b66;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .actions {
+      margin-top: 20px;
+      display: flex;
+      gap: 12px;
+    }
+
+    /* FOOTER */
+    footer {
+      background: #0c1a2b;        /* Azul oscuro igual a tu perfil */
+      color: #fff;
+      text-align: center;
+      padding: 14px 0;
+      margin-top: 40px;
+      width: 100%;
+    }
+
+    footer small {
+      opacity: 0.85;
+      font-size: 13px;
+    }
+
+
   </style>
 </head>
 <body>
+
+  <!-- HEADER -->
   <header>
     <a href="/">← Volver</a>
     <div class="h-actions" id="headRight"></div>
   </header>
 
   <main>
+
+    <!-- CARD DEL EMPLEO -->
     <section id="jobBox" class="card">
       <p class="muted">Cargando empleo…</p>
     </section>
 
+    <!-- BOTONES -->
     <div class="actions">
       <button id="applyBtn" class="btn">Postularme</button>
       <a id="appsLink" href="/applications.html" class="btn ghost" style="display:none;">Ver mis postulaciones</a>
     </div>
+
   </main>
 
+  <!-- SCRIPT PRINCIPAL -->
   <script>
     const $ = s => document.querySelector(s);
     const params = new URLSearchParams(location.search);
     const jobId = Number(params.get('id'));
     const PLACEHOLDER_LOGO = '/img/company-placeholder.png';
-    const money = n => (n==null||n==='') ? '—' :
-      new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(Number(n));
+
+    const money = n => (n == null || n === '')
+        ? '—'
+        : new Intl.NumberFormat('es-CO', {
+            style: 'currency',
+            currency: 'COP',
+            maximumFractionDigits: 0
+          }).format(Number(n));
 
     let me = null;
-    if (!jobId) {
-      $('#jobBox').innerHTML = '<p class="muted">Falta el parámetro <b>id</b> del empleo.</p>';
-      $('#applyBtn').disabled = true;
-    }
 
+    /* -------- HEADER DINÁMICO -------- */
     function renderHeader(user){
       const box = $('#headRight');
       if (!box) return;
+
       if (!user){
         box.innerHTML = '<a href="/login.html">Iniciar sesión</a>';
         return;
       }
+
       const isUser = user.role === 'USER';
       const profileHref = isUser ? '/profile.html' : '/company-profile.html';
       const profileText = isUser ? 'Mi perfil' : 'Perfil empresa';
@@ -88,14 +216,11 @@
         <button id="logoutBtn">Cerrar sesión</button>
       `;
 
-      const logoutBtn = $('#logoutBtn');
-      if (logoutBtn){
-        logoutBtn.onclick = async () => {
-          try { await fetch('/api/auth/logout', { method:'POST' }); } catch {}
-          localStorage.removeItem('user');
-          location.href = '/';
-        };
-      }
+      $('#logoutBtn').onclick = async () => {
+        try { await fetch('/api/auth/logout', { method:'POST' }); } catch {}
+        localStorage.removeItem('user');
+        location.href = '/';
+      };
     }
 
     async function fetchMe(){
@@ -103,82 +228,90 @@
         const r = await fetch('/api/auth/me');
         const j = await r.json();
         me = j.user || null;
+
         renderHeader(me);
+
         if (me?.role === 'USER') {
           $('#appsLink').style.display = 'inline-block';
         }
+
       } catch {}
     }
 
+    /* -------- CARGAR EMPLEO -------- */
     async function loadJob(){
       const box = $('#jobBox');
+
       try {
         const r = await fetch(`/api/jobs/${jobId}`);
         const j = await r.json();
-        if (!r.ok || !j.ok) throw new Error(j.msg || 'error');
+
+        if (!r.ok || !j.ok) throw new Error();
 
         const job = j.job;
+
         const created = job.created_at ? new Date(job.created_at).toLocaleDateString() : '';
-        const logo = job.logo || PLACEHOLDER_LOGO; // c.logo_url AS logo (si lo agregaste)
-        const companyWeb = (job.website)
-          ? ` · <a class="company-link" href="${job.website}" target="_blank" rel="noopener">Sitio web</a>`
+        const logo = job.logo || PLACEHOLDER_LOGO;
+
+        const companyWeb = job.website
+          ? ` · <a class="company-link" href="${job.website}" target="_blank">Sitio web</a>`
           : '';
 
         box.innerHTML = `
           <div class="top">
-            <img class="logo" src="${logo}" alt="Logo ${job.company || ''}" onerror="this.src='${PLACEHOLDER_LOGO}'">
+            <img class="logo" src="${logo}" alt="Logo" onerror="this.src='${PLACEHOLDER_LOGO}'">
             <div>
               <h2 style="margin:0 0 6px">${job.title}</h2>
               <div class="meta">
-                ${job.company} · ${job.location || '—'} ${created ? '· Publicado: ' + created : ''}${companyWeb}
+                ${job.company} · ${job.location || '—'} 
+                ${created ? '· Publicado: ' + created : ''}
+                ${companyWeb}
               </div>
-              <div style="margin-top:8px;"><span class="pill">Salario: ${money(job.salary)}</span></div>
+              <span class="pill">Salario: ${money(job.salary)}</span>
             </div>
           </div>
 
           <div style="margin-top:16px;">
-            <h3 style="margin:0 0 8px">Descripción</h3>
+            <h3 style="margin:0 0 8px;">Descripción</h3>
             <p style="white-space:pre-wrap;line-height:1.6">${job.description || ''}</p>
           </div>
         `;
-      } catch (e) {
-        console.error(e);
+      } 
+      catch (e) {
         box.innerHTML = '<p class="muted">No se pudo cargar el empleo.</p>';
         $('#applyBtn').disabled = true;
       }
     }
 
+    /* -------- POSTULAR -------- */
     async function apply(){
       if (!me) {
         location.href = `/login.html?next=${encodeURIComponent(location.pathname + location.search)}`;
         return;
       }
       if (me.role !== 'USER') {
-        alert('Solo los usuarios postulantes pueden aplicar a empleos.');
+        alert('Solo los usuarios postulantes pueden aplicar.');
         return;
       }
+
       try {
         const r = await fetch('/api/applications', {
           method: 'POST',
           headers: { 'Content-Type':'application/json' },
           body: JSON.stringify({ job_id: jobId })
         });
+
         const j = await r.json();
+
         if (r.ok) {
           alert('¡Postulación enviada! ✅');
           $('#appsLink').style.display = 'inline-block';
+        } else if (r.status === 409) {
+          alert('Ya te postulaste a este empleo.');
         } else {
-          if (r.status === 409) {
-            alert('Ya te postulaste a este empleo.');
-            $('#appsLink').style.display = 'inline-block';
-          } else if (r.status === 401) {
-            location.href = `/login.html?next=${encodeURIComponent(location.pathname + location.search)}`;
-          } else {
-            alert(j.msg || j.error || 'No se pudo postular.');
-          }
+          alert(j.msg || 'No se pudo postular.');
         }
-      } catch (e) {
-        console.error(e);
+      } catch {
         alert('Error de red al postular.');
       }
     }
@@ -190,8 +323,11 @@
       if (jobId) await loadJob();
     })();
   </script>
-  <script src="/js/nav.js"></script>
 
-  <footer id="appFooter"></footer>
+  <script src="/js/nav.js"></script>
+  <footer id="appFooter">
+    <small>© 2025 Portal Empleos • Corredor Ecológico Villavicencio Meta</small>
+  </footer>
+
 </body>
 </html>
